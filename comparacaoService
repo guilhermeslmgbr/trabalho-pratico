@@ -1,0 +1,78 @@
+const axios = require('axios');
+const moment = require('moment');
+
+
+async function getComparacao(symbol, tam, cont = 0) {
+    const url = 'https://www.alphavantage.co/query';
+    
+    // limite do contador de tentativas da recursão
+    if (cont >= 3) { 
+        throw new Error("LIMITE_EXCEDIDO: Parando para evitar bloqueio de IP após 3 tentativas.");
+    }
+
+    try {
+        console.log(`[Tentativa ${cont}] Chamando API para: ${symbol}...`);
+        
+        const response = await axios.get(url, { 
+            params: { 
+                function: 'TIME_SERIES_DAILY',
+                symbol: symbol, 
+                apikey: process.env.ALPHA_VANTAGE_KEY
+            }
+        });
+
+        
+        
+        const data = response.data;
+
+        // casos de erros da API(ela retorna status 200 mas com um objeto JSON com a mensagem de erro)
+        if (data["Note"] || data["Information"] || data["Error Message"]) {
+            const apiMsg = data["Note"] || data["Information"] || data["Error Message"];
+            console.error("[ALERTA DA API]:", apiMsg);
+            
+            const err = new Error(apiMsg);
+            err.name = "API_LIMIT_ERROR"; 
+            throw err;
+        }
+
+        const timeSeries = data["Time Series (Daily)"];
+
+        // Validação de Contrato (Verifica se os dados esperados estão no JSON)
+        //Time Series (Daily) -> tem isso?
+        // Eu tenho pelo menos 5 dias de histórico para calcular o meu piso gráfico?
+        if (timeSeries && Object.keys(timeSeries).length >= tam) {
+            console.log(`[Sucesso] Dados recebidos para ${symbol}.`);
+            
+            const lastPrices = Object.keys(timeSeries).slice(0, tam).map(date => ({
+                name: symbol,
+                lastPrice: parseFloat(timeSeries[date]["4. close"]),
+                pricedAt: date
+            }));
+
+            const maximoValor = Math.max(...lastPrices.map(p => p.lastPrice));
+            const pisoGrafico = maximoValor / 50;
+
+            return lastPrices.map(item => ({
+                name: item.name,
+                pricedAt: moment(item.pricedAt).format('DD/MM/YYYY'),
+                value: item.lastPrice < pisoGrafico ? pisoGrafico : item.lastPrice
+            }));
+
+        } else {
+            console.warn(`[Aviso] Dados incompletos no JSON. Tentativa ${cont + 1}...`);
+            return getComparacao(symbol, tam, cont + 1);
+        }
+
+    } catch (err) {
+        
+        if (err.name === "API_LIMIT_ERROR" || err.message.includes("LIMITE_EXCEDIDO")) {
+            throw err; 
+        }
+
+        // Se for erro de infraestrutura (Ex: Axios timeout, DNS), tenta de novo
+        console.error(`[Erro de Infraestrutura] ${err.message}.`);
+        return getComparacao(symbol, tam, cont + 1);
+    }
+}
+
+module.exports = { getComparacao };

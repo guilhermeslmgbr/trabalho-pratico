@@ -1,0 +1,23 @@
+# Dependências(pacotes)
+node_modules/
+
+# Variáveis de Ambiente (Segurança!)
+.env
+.env.test
+.env.local
+
+# Ferramentas de Teste e Cobertura
+coverage/
+reports/
+.stryker-tmp/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema e IDEs
+.DS_Store
+.vscode/
+.idea/
+dist/
+build/

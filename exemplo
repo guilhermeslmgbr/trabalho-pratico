@@ -1,0 +1,19 @@
+require('dotenv').config();
+const { getComparacao } = require('./comparacaoService');
+
+async function executarExemplo() {
+    console.log("--- Iniciando Estudo de Caso ---\n");
+
+    try {
+        const resultado = await getComparacao('IBM', 5);
+        
+        console.log("\n--- Resultado Final ---");
+        console.table(resultado);
+
+    } catch (error) {
+        console.error("\n[PROGRAMA ENCERRADO]");
+        console.error(`Causa: ${error.message}`);
+    }
+}
+
+executarExemplo();
