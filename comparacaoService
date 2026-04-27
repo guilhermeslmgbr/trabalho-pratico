@@ -18,7 +18,10 @@ async function getComparacao(symbol, tam, cont = 0) {
                 function: 'TIME_SERIES_DAILY',
                 symbol: symbol, 
                 apikey: process.env.ALPHA_VANTAGE_KEY
-            }
+            },
+            //Se a Alpha Vantage demorar mais de 5 segundos para responder 
+            // (seja por queda do servidor ou lentidão na rede), o Axios lançará um erro que será capturado
+            timeout: 5000
         });
 
         
@@ -51,6 +54,8 @@ async function getComparacao(symbol, tam, cont = 0) {
 
             const maximoValor = Math.max(...lastPrices.map(p => p.lastPrice));
             const pisoGrafico = maximoValor / 50;
+            // este piso foi definido pq geralmente libs que desenham gráfico costumam apresentar 
+            // bug de renderização visual em valores ínfimos, ele poderia ser alterado conforme a necessidade
 
             return lastPrices.map(item => ({
                 name: item.name,
@@ -59,7 +64,11 @@ async function getComparacao(symbol, tam, cont = 0) {
             }));
 
         } else {
-            console.warn(`[Aviso] Dados incompletos no JSON. Tentativa ${cont + 1}...`);
+            //Se for erro de consistência de resposta da API, tenta dinovo
+            const quantidadeRecebida = timeSeries ? Object.keys(timeSeries).length : 0;
+            console.warn(`[Aviso] Dados incompletos no JSON. Esperava ${tam}, mas recebi ${quantidadeRecebida}. Tentativa ${cont + 1}...`);
+            console.log("Aguardando 2 segundos para estabilização da rede...");
+            await sleep(2000);
             return getComparacao(symbol, tam, cont + 1);
         }
 
@@ -71,6 +80,8 @@ async function getComparacao(symbol, tam, cont = 0) {
 
         // Se for erro de infraestrutura (Ex: Axios timeout, DNS), tenta de novo
         console.error(`[Erro de Infraestrutura] ${err.message}.`);
+        console.log("Aguardando 2 segundos para estabilização da rede...");
+        await sleep(2000);
         return getComparacao(symbol, tam, cont + 1);
     }
 }

@@ -1,0 +1,57 @@
+const axios = require('axios');
+const moment = require('moment');
+
+
+async function getComparacao(symbol, tam, cont = 0) {
+    const url = 'https://www.alphavantage.co/query';
+    console.log(`[Tentativa ${cont}] Chamando API para: ${symbol}...`);
+        return axios
+        .get(url, { params: { 
+                function: 'TIME_SERIES_DAILY',
+                symbol: symbol, 
+                apikey: process.env.ALPHA_VANTAGE_KEY
+            }}).then(res => {
+                let dadosApi = res.data;
+                const timeSeries = data["Time Series (Daily)"];
+            if (dadosApi.lastPrices.length == tam) {
+               console.log(`[Sucesso] Dados recebidos para ${symbol}.`);         
+               const lastPrices = Object.keys(timeSeries).slice(0, tam).map(date => ({
+                               name: symbol,
+                               lastPrice: parseFloat(timeSeries[date]["4. close"]),
+                               pricedAt: date
+                           }));
+                           const maximoValor = Math.max(...lastPrices.map(p => p.lastPrice));
+                           const pisoGrafico = maximoValor / 50;
+                           // este piso foi definido pq geralmente libs que desenham gráfico costumam apresentar 
+                           // bug de renderização visual em valores ínfimos, ele poderia ser alterado conforme a necessidade
+                           return lastPrices.map(item => ({
+                               name: item.name,
+                               pricedAt: moment(item.pricedAt).format('DD/MM/YYYY'),
+                               value: item.lastPrice < pisoGrafico ? pisoGrafico : item.lastPrice
+                           }));
+            }
+            else {
+             const quantidadeRecebida = timeSeries ? Object.keys(timeSeries).length : 0;
+             console.warn(`[Aviso] Dados incompletos no JSON. Esperava ${tam}, mas recebi ${quantidadeRecebida}. Tentativa ${cont + 1}...`);
+            return getComparacao(symbol, tam, cont + 1);
+            }
+        }).catch(err => {
+            // A API devolve sempre status 200 quando responde qualquer coisa, o que é um erro de design de API(Antipadrão de Design de API)
+            // O programador não entende por que a API não devolve as informações segundo o que foi pedido por causa 
+            // da forma como foram realizadas as requisições
+            // Além disso o programador não debugou a API, não sabe exatamente como ela funciona,
+            // por isso a idéia dele é que se a API não devolve as coisas do jeito que ele quer, ele tenta 50 vezes a mesma coisa
+            // até que uma hora funciona, mas ele não sabe o porque
+            // O programador adota uma estratégia de retry que é praticamente um ataque de negação de serviço(DoS)
+            //Se a API estivesse fora do ar ou o IP bloqueado, o código dispararia 50 requisições em sequência
+            if (cont < 50) {
+                return getComparacao(symbol, tam, cont + 1);
+            }
+            else {
+                console.warn(err);
+                console.log("erro em getComparacao");
+            }
+        });
+}
+
+module.exports = { getComparacao };

@@ -1,11 +1,11 @@
 require('dotenv').config();
-const { getComparacao } = require('./comparacaoService');
+const { getComparacao } = require('./comparacaoServiceBrokenAsFlaki');
 
 async function executarExemplo() {
     console.log("--- Iniciando Estudo de Caso ---\n");
 
     try {
-        const resultado = await getComparacao('IBM', 5);
+        const resultado = await getComparacao('PETR4.SAO', 30);
         
         console.log("\n--- Resultado Final ---");
         console.table(resultado);
