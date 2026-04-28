@@ -5,7 +5,7 @@ async function executarExemplo() {
     console.log("--- Iniciando Estudo de Caso ---\n");
 
     try {
-        const resultado = await getComparacao('PETR4.SAO', 30);
+        const resultado = await getComparacao('PETR4.SAO', 100);
         
         console.log("\n--- Resultado Final ---");
         console.table(resultado);

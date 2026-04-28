@@ -1,89 +1,68 @@
 const axios = require('axios');
 const moment = require('moment');
-
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function getComparacao(symbol, tam, cont = 0) {
     const url = 'https://www.alphavantage.co/query';
-    
-    // limite do contador de tentativas da recursão
     if (cont >= 3) { 
-        throw new Error("LIMITE_EXCEDIDO: Parando para evitar bloqueio de IP após 3 tentativas.");
+        throw new Error("LIMITE_EXCEDIDO: Após o limite de tentativas o sistema não conseguiu obter a resposta esperada da API.");
     }
-
     try {
         console.log(`[Tentativa ${cont}] Chamando API para: ${symbol}...`);
-        
         const response = await axios.get(url, { 
             params: { 
                 function: 'TIME_SERIES_DAILY',
                 symbol: symbol, 
                 apikey: process.env.ALPHA_VANTAGE_KEY
             },
-            //Se a Alpha Vantage demorar mais de 5 segundos para responder 
-            // (seja por queda do servidor ou lentidão na rede), o Axios lançará um erro que será capturado
-            timeout: 5000
+            timeout: 3000
         });
-
-        
-        
         const data = response.data;
-
         // casos de erros da API(ela retorna status 200 mas com um objeto JSON com a mensagem de erro)
         if (data["Note"] || data["Information"] || data["Error Message"]) {
             const apiMsg = data["Note"] || data["Information"] || data["Error Message"];
             console.error("[ALERTA DA API]:", apiMsg);
-            
             const err = new Error(apiMsg);
             err.name = "API_LIMIT_ERROR"; 
             throw err;
         }
-
         const timeSeries = data["Time Series (Daily)"];
-
         // Validação de Contrato (Verifica se os dados esperados estão no JSON)
         //Time Series (Daily) -> tem isso?
         // Eu tenho pelo menos 5 dias de histórico para calcular o meu piso gráfico?
         if (timeSeries && Object.keys(timeSeries).length >= tam) {
             console.log(`[Sucesso] Dados recebidos para ${symbol}.`);
-            
             const lastPrices = Object.keys(timeSeries).slice(0, tam).map(date => ({
                 name: symbol,
                 lastPrice: parseFloat(timeSeries[date]["4. close"]),
                 pricedAt: date
             }));
-
             const maximoValor = Math.max(...lastPrices.map(p => p.lastPrice));
             const pisoGrafico = maximoValor / 50;
             // este piso foi definido pq geralmente libs que desenham gráfico costumam apresentar 
             // bug de renderização visual em valores ínfimos, ele poderia ser alterado conforme a necessidade
-
             return lastPrices.map(item => ({
                 name: item.name,
                 pricedAt: moment(item.pricedAt).format('DD/MM/YYYY'),
                 value: item.lastPrice < pisoGrafico ? pisoGrafico : item.lastPrice
             }));
-
         } else {
             //Se for erro de consistência de resposta da API, tenta dinovo
             const quantidadeRecebida = timeSeries ? Object.keys(timeSeries).length : 0;
             console.warn(`[Aviso] Dados incompletos no JSON. Esperava ${tam}, mas recebi ${quantidadeRecebida}. Tentativa ${cont + 1}...`);
-            console.log("Aguardando 2 segundos para estabilização da rede...");
-            await sleep(2000);
+            console.log("Aguardando 3 segundos para estabilização da rede...");
+            await sleep(3000);
             return getComparacao(symbol, tam, cont + 1);
         }
-
     } catch (err) {
-        
+        // Se for erro de infraestrutura (Ex: Axios timeout, DNS), tenta de novo
         if (err.name === "API_LIMIT_ERROR" || err.message.includes("LIMITE_EXCEDIDO")) {
             throw err; 
         }
-
-        // Se for erro de infraestrutura (Ex: Axios timeout, DNS), tenta de novo
         console.error(`[Erro de Infraestrutura] ${err.message}.`);
-        console.log("Aguardando 2 segundos para estabilização da rede...");
-        await sleep(2000);
+        console.log("Aguardando 3 segundos para estabilização da rede...");
+        await sleep(3000);
         return getComparacao(symbol, tam, cont + 1);
     }
 }
-
 module.exports = { getComparacao };
